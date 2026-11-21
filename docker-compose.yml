@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: agenteval
+      POSTGRES_USER: eval_user
+      POSTGRES_PASSWORD: secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init.sql
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    ports:
+      - "16686:16686"  # UI
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  agenteval-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+    depends_on:
+      - postgres
+      - redis
+      - jaeger
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+  redis_data:
